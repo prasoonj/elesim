@@ -11,8 +11,10 @@ object ElevatorActor {
   case object WhereAreYou
   case object MoveOneFloor
   case object GoInLimbo
+//  case class ElevatorState(currentFloor: Int, direction: String)
   case class AddStoppage(from: Int, to: Int)
   case class CanStop(from: Int, to: Int, direction: String)
+//  case class ExistingStop(floor: Int, direction: String)
   case class Status(currentFloor: Int, direction: String, stops: List[Int])
   case object ReportStatus
   
@@ -35,23 +37,19 @@ with Timers with ActorLogging {
   
   import scala.concurrent.duration._
 
+  var greeting = ""
+  var currentFloor = elevatorRange._1
+  var currentDirection = "LIMBO"
   var state = State(0, Limbo, Limbo) 
   var stops: scala.collection.mutable.Set[Int] = HashSet.empty
   var pickUps: scala.collection.mutable.Set[PickUp] = HashSet.empty
-  var MANUAL_MODE = false
+  var pickUpsDirection: String = "LIMBO"
   
   case class State(currentFloor: Int
       , currentDir: Direction
       , pickUpsDir: Direction)
    
-  def status(): Status = {
-    val dir: String = (state.currentDir match {
-      case Up => "UP"
-      case Down => "DOWN"
-      case Limbo => "LIMBO"
-    })
-    Status(state.currentFloor, dir, stops.toList)
-  }
+  def status(): Status = Status(currentFloor, currentDirection, stops.toList)
   
   def inRange(from: Int, to: Int, state: State) = state.currentDir match {
     case Up => (from > state.currentFloor)
@@ -102,28 +100,15 @@ with Timers with ActorLogging {
       }
     }
     case GoInLimbo =>
-      ioActor ! MessageFrom(s"Welcome at floor: ${state.currentFloor}")
+      ioActor ! MessageFrom(s"Welcome to floor: ${state.currentFloor}")
       timers.cancelAll()
       state = State(state.currentFloor, Limbo, Limbo)
     case RestartTick =>
-      if(!MANUAL_MODE) timers.startPeriodicTimer(TickKey, Tick, 2.second)
+      timers.startPeriodicTimer(TickKey, Tick, 2.second)
     case Tick => state.currentDir match {
       case Up if(state.currentFloor < elevatorRange._2) => 
         state = State(state.currentFloor+1, state.currentDir, state.pickUpsDir)
-        moveAhead()
-      case Down if(state.currentFloor > elevatorRange._1) =>
-        state = State(state.currentFloor-1, state.currentDir, state.pickUpsDir)
-        moveAhead()
-    }
-    case StartManualMode => MANUAL_MODE = true
-    case DisableManualMode => MANUAL_MODE = false
-    case NextStep => self ! Tick
-    case ReportStatus => ioActor ! Message(s"#$name: @${status.currentFloor}, going ${status.direction}: ${stops.toList}")
-    case x => ioActor ! MessageFrom(s"Something went wrong with this message: $x")
-  }
-  
-  def moveAhead() = 
-    ioActor ! MessageFrom(s"I'm at ${state.currentFloor}")
+        ioActor ! MessageFrom(s"I'm at ${state.currentFloor}")
         if(stops.isEmpty) self ! GoInLimbo
         if(stops.contains(state.currentFloor)) {
           stops.remove(state.currentFloor)
@@ -138,8 +123,40 @@ with Timers with ActorLogging {
           }
           pickUpsHere.foreach(p => pickUps.remove(p))
         }
-        if(!MANUAL_MODE){
-          if(!stops.isEmpty) timers.startSingleTimer(BoardingTickKey, RestartTick, 5.second)
-          else (self ! GoInLimbo)
-        }        
+        if(!stops.isEmpty) timers.startSingleTimer(BoardingTickKey, RestartTick, 5.second)
+        else (self ! GoInLimbo)
+      case Down if(state.currentFloor > elevatorRange._1) =>
+        state = State(state.currentFloor-1, state.currentDir, state.pickUpsDir)
+        ioActor ! MessageFrom(s"I'm at ${state.currentFloor}")
+        if(stops.isEmpty) self ! GoInLimbo
+        if(stops.contains(state.currentFloor)) {
+          stops.remove(state.currentFloor)
+          timers.cancel(TickKey)
+          val pickUpsHere = pickUps.filter { p => (p.from == state.currentFloor) }
+          pickUpsHere
+          .map { p =>
+            stops.remove(p.from)
+            stops.add(p.to)
+            state = State(state.currentFloor, p.direction, p.direction)
+          }
+          pickUpsHere.foreach(p => pickUps.remove(p))
+        }
+        if(!stops.isEmpty) timers.startSingleTimer(BoardingTickKey, RestartTick, 5.second)
+        else (self ! GoInLimbo)
+      case _ => self ! GoInLimbo
+    }
+    case MoveOneFloor => 
+      if(!stops.isEmpty) {
+        if(currentDirection.equals("UP") && currentFloor < elevatorRange._2) currentFloor += 1
+        else if(currentDirection.equals("DOWN") && currentFloor > elevatorRange._1) currentFloor -= 1
+      }
+      // Go back to Tick!
+      context.self ! Tick
+    case ReportStatus => ioActor ! Message(s"#$name: @${status.currentFloor}, going ${status.direction}: ${stops.toList}")
+  }
+  
+  def moveOneFloor = if(!stops.isEmpty) {
+        if(currentDirection.equals("UP") && currentFloor < elevatorRange._2) currentFloor += 1
+        else if(currentDirection.equals("DOWN") && currentFloor > elevatorRange._1) currentFloor -= 1
+      }
 }
