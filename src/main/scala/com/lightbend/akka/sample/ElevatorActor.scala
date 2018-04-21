@@ -113,15 +113,7 @@ with Timers with ActorLogging {
         if(stops.contains(state.currentFloor)) {
           stops.remove(state.currentFloor)
           timers.cancel(TickKey)
-          //Check for pickups at this floor
-          val pickUpsHere = pickUps.filter{ p => (p.from == state.currentFloor) }
-          pickUpsHere
-          .map { p =>
-            stops.remove(p.from)
-            stops.add(p.to)
-            state = State(state.currentFloor, p.direction, p.direction)
-          }
-          pickUpsHere.foreach(p => pickUps.remove(p))
+          processPickups()
         }
         if(!stops.isEmpty) timers.startSingleTimer(BoardingTickKey, RestartTick, 5.second)
         else (self ! GoInLimbo)
@@ -132,7 +124,17 @@ with Timers with ActorLogging {
         if(stops.contains(state.currentFloor)) {
           stops.remove(state.currentFloor)
           timers.cancel(TickKey)
-          val pickUpsHere = pickUps.filter { p => (p.from == state.currentFloor) }
+          processPickups()
+        }
+        if(!stops.isEmpty) timers.startSingleTimer(BoardingTickKey, RestartTick, 5.second)
+        else (self ! GoInLimbo)
+      case _ => self ! GoInLimbo
+    }
+    case ReportStatus => ioActor ! Message(s"#$name: @${status.currentFloor}, going ${status.direction}: ${stops.toList}".replace("List", "Stops"))
+  }
+  
+  def processPickups() = {
+    val pickUpsHere = pickUps.filter{ p => (p.from == state.currentFloor) }
           pickUpsHere
           .map { p =>
             stops.remove(p.from)
@@ -140,11 +142,5 @@ with Timers with ActorLogging {
             state = State(state.currentFloor, p.direction, p.direction)
           }
           pickUpsHere.foreach(p => pickUps.remove(p))
-        }
-        if(!stops.isEmpty) timers.startSingleTimer(BoardingTickKey, RestartTick, 5.second)
-        else (self ! GoInLimbo)
-      case _ => self ! GoInLimbo
-    }
-    case ReportStatus => ioActor ! Message(s"#$name: @${status.currentFloor}, going ${status.direction}: ${stops.toList}".replace("List", "Stops"))
   }
 }
