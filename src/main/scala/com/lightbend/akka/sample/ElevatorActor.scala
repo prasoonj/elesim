@@ -11,10 +11,7 @@ object ElevatorActor {
   case object WhereAreYou
   case object MoveOneFloor
   case object GoInLimbo
-//  case class ElevatorState(currentFloor: Int, direction: String)
-  case class AddStoppage(from: Int, to: Int)
   case class CanStop(from: Int, to: Int, direction: String)
-//  case class ExistingStop(floor: Int, direction: String)
   case class Status(currentFloor: Int, direction: String, stops: List[Int])
   case object ReportStatus
   
@@ -37,19 +34,22 @@ with Timers with ActorLogging {
   
   import scala.concurrent.duration._
 
-  var greeting = ""
-  var currentFloor = elevatorRange._1
-  var currentDirection = "LIMBO"
   var state = State(0, Limbo, Limbo) 
   var stops: scala.collection.mutable.Set[Int] = HashSet.empty
   var pickUps: scala.collection.mutable.Set[PickUp] = HashSet.empty
-  var pickUpsDirection: String = "LIMBO"
   
   case class State(currentFloor: Int
       , currentDir: Direction
       , pickUpsDir: Direction)
    
-  def status(): Status = Status(currentFloor, currentDirection, stops.toList)
+  def status(): Status = { 
+    val direction = state.currentDir match {
+      case Limbo => "LIMBO"
+      case Up => "UP"
+      case Down => "DOWN"
+    }
+    Status(state.currentFloor, direction, stops.toList)
+  }
   
   def inRange(from: Int, to: Int, state: State) = state.currentDir match {
     case Up => (from > state.currentFloor)
@@ -145,18 +145,6 @@ with Timers with ActorLogging {
         else (self ! GoInLimbo)
       case _ => self ! GoInLimbo
     }
-    case MoveOneFloor => 
-      if(!stops.isEmpty) {
-        if(currentDirection.equals("UP") && currentFloor < elevatorRange._2) currentFloor += 1
-        else if(currentDirection.equals("DOWN") && currentFloor > elevatorRange._1) currentFloor -= 1
-      }
-      // Go back to Tick!
-      context.self ! Tick
-    case ReportStatus => ioActor ! Message(s"#$name: @${status.currentFloor}, going ${status.direction}: ${stops.toList}")
+    case ReportStatus => ioActor ! Message(s"#$name: @${status.currentFloor}, going ${status.direction}: ${stops.toList}".replace("List", "Stops"))
   }
-  
-  def moveOneFloor = if(!stops.isEmpty) {
-        if(currentDirection.equals("UP") && currentFloor < elevatorRange._2) currentFloor += 1
-        else if(currentDirection.equals("DOWN") && currentFloor > elevatorRange._1) currentFloor -= 1
-      }
 }

@@ -13,7 +13,6 @@ object ElevatorSim extends App {
   
   val simController: ActorRef = 
     system.actorOf(Controller.props("Controller", ioActor), "controller")
-//  simController ! Start
   
   import scala.io.StdIn  
   val PickupRegEx = "\\s*>*\\(([0-9]+),\\s*([0-9]+)\\)\\s*".r

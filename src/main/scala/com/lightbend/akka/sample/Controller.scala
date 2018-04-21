@@ -7,7 +7,6 @@ import akka.actor.Timers
 object Controller {
   def props(message: String, ioActor: ActorRef): Props = Props(new Controller(message, ioActor))
   
-  case object Greet
   case object Start
   
   sealed trait Direction
