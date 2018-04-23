@@ -1,5 +1,7 @@
 # Elevator Simulator
 
+A simple simulator that mimics an elevator controller.
+
 ## Running the simulation
 This project is built on `sbt` so please ensure you have `sbt` installed ( `$ brew install sbt` on Mac ) 
 
