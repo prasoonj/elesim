@@ -1,4 +1,4 @@
-package com.lightbend.akka.sample
+package com.snortingcode
 
 import akka.actor.{ Actor, ActorLogging, ActorRef, ActorSystem, Props }
 
@@ -26,6 +26,7 @@ object ElevatorSim extends App {
   val ExitRegEx = "\\s*exit\\s*".r
   val BasicInit = "\\s*init\\s*([0-9]+)\\s*".r
   val Dashboard = "\\s*dashboard\\s*".r
+  val Verbose = "\\s*v\\s*".r
   
   
   
@@ -62,6 +63,7 @@ object ElevatorSim extends App {
       case HelpRegEx() => DisplayHelp
       case BasicInit(n) => InitializeWithDefaults(n.toInt)
       case Dashboard() => DisplayDash
+      case Verbose() => VerboseOutput
       case ExitRegEx() => 
         {
           system.terminate()

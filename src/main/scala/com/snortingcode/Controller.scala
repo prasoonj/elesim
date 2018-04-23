@@ -1,11 +1,11 @@
-package com.lightbend.akka.sample
+package com.snortingcode
 
 import akka.actor.{ Actor, ActorLogging, ActorRef, ActorSystem, Props }
 import scala.collection.mutable.HashSet
 import akka.actor.Timers
 
 object Controller {
-  def props(message: String, ioActor: ActorRef): Props = Props(new Controller(message, ioActor))
+  def props(name: String, ioActor: ActorRef): Props = Props(new Controller(name, ioActor))
   
   case object Start
   
@@ -37,9 +37,10 @@ object Controller {
   final case object NextStep
   final case object DisplayHelp
   final case object DisplayDash
+  final case object VerboseOutput
 }
 
-class Controller(message: String, ioActor: ActorRef) extends Actor {
+class Controller(name: String, ioActor: ActorRef) extends Actor {
   import IOActor._
   import Controller._
   import ElevatorActor._
@@ -70,11 +71,11 @@ class Controller(message: String, ioActor: ActorRef) extends Actor {
     case CanPickup(pickUp) => 
       if(stopRequests.contains(pickUp)) {
         context.sender() ! AddPickup(pickUp)
-        ioActor ! MessageFrom(s"Asking ${context.sender()} to stop at ${pickUp.from}")
+        ioActor ! MessageFrom(name, s"Asking ${context.sender()} to stop at ${pickUp.from}")
         stopRequests.remove(pickUp)
       }
     case StartManualMode => {
-      ioActor ! Message("Press 'n' to run through the simulation")
+      ioActor ! Message("Press 'n' successively to run through the simulation")
       context.children.map( e => e ! StartManualMode )
     }
     case DisableManualMode => {
@@ -84,11 +85,12 @@ class Controller(message: String, ioActor: ActorRef) extends Actor {
     case NextStep => context.children.map( e => e ! NextStep )
     case DisplayHelp => ioActor ! Help
     case DisplayDash => 
-      ioActor ! Message(s"Pending pickups: $stopRequests")
+      ioActor ! Message(s"**************DASHBOARD**************\nPending pickups: $stopRequests")
       context.children.map( e => e ! ReportStatus)
+    case VerboseOutput => context.children.map( e => e ! VerboseOutput)
     case InvalidRequest(message) =>
       ioActor ! Message(s"$message")
-    case x => ioActor ! MessageFrom(s"Something went wrong with this message: $x")
+    case x => ioActor ! MessageFrom(name, s"Something went wrong with this message: $x")
   }
 }
 

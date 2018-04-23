@@ -1,4 +1,4 @@
-package com.lightbend.akka.sample
+package com.snortingcode
 import akka.actor.{ Actor, ActorLogging, ActorRef, ActorSystem, Props }
 import scala.collection.mutable.HashSet
 import akka.actor.Timers
@@ -34,6 +34,9 @@ with Timers with ActorLogging {
   
   import scala.concurrent.duration._
 
+  var VERBOSE = false
+  var MANUAL_MODE = false
+  
   var state = State(0, Limbo, Limbo) 
   var stops: scala.collection.mutable.Set[Int] = HashSet.empty
   var pickUps: scala.collection.mutable.Set[PickUp] = HashSet.empty
@@ -61,7 +64,15 @@ with Timers with ActorLogging {
       (pickUp.direction == state.currentDir)
       && (pickUp.direction == state.pickUpsDir)
       && inRange(pickUp.from, pickUp.to, state)) true
-  else if(state.currentDir == Limbo) true
+  else if(state.currentDir == Limbo) {
+    /*
+     * Just enough time to give priority to the
+     * elevators that are already in operation in the 
+     * right direction and are in range.
+     */
+    Thread.sleep(500)
+    true
+  }
   else false
   
   def getDirection(destination: Int): Direction = 
@@ -100,15 +111,25 @@ with Timers with ActorLogging {
       }
     }
     case GoInLimbo =>
-      ioActor ! MessageFrom(s"Welcome to floor: ${state.currentFloor}")
+      ioActor ! MessageFrom(s"Elevator $name", s"Welcome to floor: ${state.currentFloor}")
       timers.cancelAll()
       state = State(state.currentFloor, Limbo, Limbo)
+    case StartManualMode => MANUAL_MODE = true
+    case DisableManualMode => MANUAL_MODE = false
+    case NextStep => {
+      self ! Tick
+      context.parent ! DisplayDash
+    }
     case RestartTick =>
-      timers.startPeriodicTimer(TickKey, Tick, 2.second)
+      if(!MANUAL_MODE) {
+        timers.startPeriodicTimer(TickKey, Tick, 2.second)
+        context.parent ! DisplayDash
+      }
     case Tick => state.currentDir match {
       case Up if(state.currentFloor < elevatorRange._2) => 
         state = State(state.currentFloor+1, state.currentDir, state.pickUpsDir)
-        ioActor ! MessageFrom(s"I'm at ${state.currentFloor}")
+        if(VERBOSE) ioActor ! MessageFrom(s"Elevator $name", s"I'm at ${state.currentFloor}")
+        context.parent ! DisplayDash
         if(stops.isEmpty) self ! GoInLimbo
         if(stops.contains(state.currentFloor)) {
           stops.remove(state.currentFloor)
@@ -119,7 +140,8 @@ with Timers with ActorLogging {
         else (self ! GoInLimbo)
       case Down if(state.currentFloor > elevatorRange._1) =>
         state = State(state.currentFloor-1, state.currentDir, state.pickUpsDir)
-        ioActor ! MessageFrom(s"I'm at ${state.currentFloor}")
+        if(VERBOSE) ioActor ! MessageFrom(s"Elevator $name", s"I'm at ${state.currentFloor}")
+        context.parent ! DisplayDash
         if(stops.isEmpty) self ! GoInLimbo
         if(stops.contains(state.currentFloor)) {
           stops.remove(state.currentFloor)
@@ -130,7 +152,8 @@ with Timers with ActorLogging {
         else (self ! GoInLimbo)
       case _ => self ! GoInLimbo
     }
-    case ReportStatus => ioActor ! Message(s"#$name: @${status.currentFloor}, going ${status.direction}: ${stops.toList}".replace("List", "Stops"))
+    case ReportStatus => ioActor ! Message(s"Elevator#$name: @${status.currentFloor}, going ${status.direction}: ${stops.toList}".replace("List", "Stops"))
+    case VerboseOutput => VERBOSE = true
   }
   
   def processPickups() = {
